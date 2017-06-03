@@ -41,7 +41,7 @@ bool MyApp::OnInit()
 }
 
 MyFrame::MyFrame()
-        : wxFrame(NULL, wxID_ANY, "Hello World")
+        : wxFrame(NULL, wxID_ANY, "Simple Open GL")
 {
 	wxMenu *menuFile = new wxMenu;
 	menuFile->Append(ID_Hello, "&Hello...\tCtrl-H",
@@ -55,7 +55,7 @@ MyFrame::MyFrame()
 	menuBar->Append( menuHelp, "&Help" );
 	SetMenuBar( menuBar );
 	CreateStatusBar();
-	SetStatusText( "Welcome to wxWidgets!" );
+	SetStatusText( "OpenGL display on wxWidget!" );
 	Bind(wxEVT_MENU, &MyFrame::OnHello, this, ID_Hello);
 	Bind(wxEVT_MENU, &MyFrame::OnAbout, this, wxID_ABOUT);
 	Bind(wxEVT_MENU, &MyFrame::OnExit, this, wxID_EXIT);

@@ -15,7 +15,7 @@ DEBUG_OUT=$(NAME)_debug
 
 CPPFLAGS=`wx-config --cflags`
 
-LDFLAGS=`wx-config --libs` -lstdc++
+LDFLAGS=`wx-config --libs --gl-libs` -lstdc++ -lGL -lGLU
 
 C_REL_OBJS   = ${C_OBJS:.o=.rco}
 CPP_REL_OBJS = ${CPP_OBJS:.o=.rcppo}

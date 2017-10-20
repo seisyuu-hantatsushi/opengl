@@ -1,0 +1,40 @@
+CC  = clang -c
+CXX = clang++ -c
+LD  = clang
+
+CFLAGS_RELEASE   = -g -O2 
+CXXFLAGS_RELEASE = -g -O2
+
+CFLAGS_DEBUG = -g -O0
+CFLAGS_DEBUG = -g -O0
+
+RELEASE_OBJS_C = ${OBJS_C:.o=.rco}
+RELEASE_OBJS_CXX = ${OBJS_CXX:.o=.rcppo}
+
+DEBUG_OBJS_C   = ${OBJS_C:.o=.dco}
+DEBUG_OBJS_CXX = ${OBJS_CXX:.o=.dcppo}
+
+RELEASE_OBJS = $(RELEASE_OBJS_C) $(RELEASE_OBJS_CXX)
+DEBUG_OBJS = $(DEBUG_OBJS_C) $(DEBUG_OBJS_CXX)
+
+all: release
+
+release : $(RELEASE_TARGET)
+
+%.rco: %.c
+	$(CC) $(INCDIRS) $(CFLAGS_RELEASE) $< -o $@ 
+
+%.rcppo: %.cpp
+	$(CXX) $(INCDIRS) $(CXXFLAGS_RELEASE) $< -o $@ 
+
+%.dcppo: %.cpp
+	$(CXX) $(INCDIRS) $(CXXFLAGS_DEBUG) $< -o $@
+
+%.dco: %.c
+	$(CC) $(INCDIRS) $(CFLAGS_DEBUG) $< -o $@ 
+
+$(RELEASE_TARGET) : $(RELEASE_OBJS)
+	$(LD) $(LIBS) $< -o $@
+
+clean:
+	rm -rf $(TARGETS) $(RELEASE_OBJS_CXX) *.co *~

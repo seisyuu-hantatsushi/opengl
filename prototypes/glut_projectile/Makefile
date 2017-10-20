@@ -2,12 +2,12 @@ NAME = glut_projectile
 
 RELEASE_TARGET = $(NAME)
 
-TARGETS = $(RELEASE_TARGET)
+TARGET = $(RELEASE_TARGET)
 
 INCDIRS = -I../../library/include
 
 LIBS = -lm -lGL -lGLU -lglut -lGLEW -lstdc++
 
-OBJS_CXX = main.o
+CXX_OBJS = main.o
 
 include ../Makefile.common

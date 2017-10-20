@@ -2,39 +2,44 @@ CC  = clang -c
 CXX = clang++ -c
 LD  = clang
 
-CFLAGS_RELEASE   = -g -O2 
+OBJCOPY=objcopy
+
+CFLAGS_RELEASE   = -g -O2
 CXXFLAGS_RELEASE = -g -O2
 
 CFLAGS_DEBUG = -g -O0
 CFLAGS_DEBUG = -g -O0
 
-RELEASE_OBJS_C = ${OBJS_C:.o=.rco}
-RELEASE_OBJS_CXX = ${OBJS_CXX:.o=.rcppo}
+RELEASE_OBJS_C = ${C_OBJS:.o=.rco}
+RELEASE_OBJS_CXX = ${CXX_OBJS:.o=.rcppo}
 
-DEBUG_OBJS_C   = ${OBJS_C:.o=.dco}
-DEBUG_OBJS_CXX = ${OBJS_CXX:.o=.dcppo}
+DEBUG_OBJS_C   = ${C_OBJS:.o=.dco}
+DEBUG_OBJS_CXX = ${CXX_OBJS:.o=.dcppo}
 
-RELEASE_OBJS = $(RELEASE_OBJS_C) $(RELEASE_OBJS_CXX)
-DEBUG_OBJS = $(DEBUG_OBJS_C) $(DEBUG_OBJS_CXX)
+RELEASE_OBJS = $(RELEASE_OBJS_C) $(RELEASE_OBJS_CXX) $(VERT_OBJS) $(FRAG_OBJS)
+DEBUG_OBJS = $(DEBUG_OBJS_C) $(DEBUG_OBJS_CXX) $(VERT_OBJS) $(FRAG_OBJS)
 
 all: release
 
 release : $(RELEASE_TARGET)
 
 %.rco: %.c
-	$(CC) $(INCDIRS) $(CFLAGS_RELEASE) $< -o $@ 
+	$(CC) $(INCDIRS) $(CFLAGS_RELEASE) $< -o $@
 
 %.rcppo: %.cpp
-	$(CXX) $(INCDIRS) $(CXXFLAGS_RELEASE) $< -o $@ 
+	$(CXX) $(INCDIRS) $(CXXFLAGS_RELEASE) $< -o $@
 
 %.dcppo: %.cpp
 	$(CXX) $(INCDIRS) $(CXXFLAGS_DEBUG) $< -o $@
 
 %.dco: %.c
-	$(CC) $(INCDIRS) $(CFLAGS_DEBUG) $< -o $@ 
+	$(CC) $(INCDIRS) $(CFLAGS_DEBUG) $< -o $@
+
+%.vo: %.vert
+	$(OBJCOPY) --readonly-text -I binary -B i386 -O elf64-x86-64 $< $@
 
 $(RELEASE_TARGET) : $(RELEASE_OBJS)
-	$(LD) $(LIBS) $< -o $@
+	$(LD) $(LIBS) $^ -o $@
 
 clean:
-	rm -rf $(TARGETS) $(RELEASE_OBJS_CXX) *.co *~
+	rm -rf $(TARGET) $(RELEASE_OBJS_CXX) *.rco *.dco *.rcppo *.dcppo *.vo *.fo *~

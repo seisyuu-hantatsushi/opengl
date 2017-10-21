@@ -1,7 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <string.h>
 #include <errno.h>
+
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+
+#include <GL/glx.h>
 
 #include "shaderprogramset.h"
 
@@ -11,7 +16,7 @@ struct ShaderProgramSet {
 	GLuint programId;
 };
 
-static void printShaderCompileInfo(GLuint shaderId) {
+static int32_t printShaderCompileInfo(GLuint shaderId) {
 	GLint status = 0;
 
 	glGetShaderiv(shaderId, GL_COMPILE_STATUS, &status);
@@ -35,7 +40,7 @@ static void printShaderCompileInfo(GLuint shaderId) {
 	return 0;
 }
 
-static int32_t createShader(GLenum shaderType, const char *pShaderSrc, GLuint *pShaderId) const {
+static int32_t createShader(GLenum shaderType, const char *pShaderSrc, GLuint *pShaderId) {
 	int32_t ret;
 	GLuint shaderId;
 	GLenum glErr;
@@ -72,7 +77,7 @@ static int32_t deleteShader(GLuint shaderId){
 	return 0;
 }
 
-static void printShaderLinkInfo(GLuint programId){
+static int32_t printShaderLinkInfo(GLuint programId){
 	GLint status = 0;
 
 	glGetProgramiv(programId, GL_LINK_STATUS, &status);
@@ -211,4 +216,13 @@ int32_t shaderProgramSetDestroy(ShaderProgramSetHandler handler){
 	free(pSet);
 
 	return -1;
+}
+
+GLuint shaderProgramGetProgram(ShaderProgramSetHandler handler){
+	struct ShaderProgramSet *pSet =
+		(struct ShaderProgramSet *)handler;
+	if(handler == NULL){
+		return 0;
+	}
+	return pSet->programId;
 }

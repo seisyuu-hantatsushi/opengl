@@ -26,6 +26,7 @@ static int32_t printShaderCompileInfo(GLuint shaderId) {
 		if(count > 0){
 			GLchar *pErrorStr = malloc(sizeof(GLchar)*(count+1));
 			if(pErrorStr != NULL){
+				glGetShaderInfoLog(shaderId, count, NULL, pErrorStr);
 				printf("Shader Compile Status\n");
 				printf("%s\n", pErrorStr);
 				free(pErrorStr);

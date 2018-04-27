@@ -14,7 +14,7 @@ OBJS = $(C_OBJS) $(CXX_OBJS)
 
 SRCS = ${C_OBJS:.co=.c}
 
-LIBS = -lm -lGL -lglut
+LIBS = -lm -lGL -lGLU -lglut
 
 %.co : %.c
 	$(CC) $(CFLAGS) $< -o $@

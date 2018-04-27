@@ -54,9 +54,9 @@ quat quat_sub(const quat *ql, const quat *qr){
 quat quat_mul(const quat *ql, const quat *qr){
 	quat q;
 	q.w = ql->w * qr->w - ql->x * qr->x - ql->y * qr->y - ql->z * qr->z;
-	q.x = ql->w * qr->x + ql->x * qr->w - ql->y * qr->z + ql->z * qr->y;
-	q.y = ql->w * qr->y + ql->x * qr->z + ql->y * qr->w - ql->z * qr->x;
-	q.z = ql->w * qr->z - ql->x * qr->y + ql->y * qr->x + ql->z * qr->w;
+	q.x = ql->w * qr->x + ql->x * qr->w + ql->y * qr->z - ql->z * qr->y;
+	q.y = ql->w * qr->y - ql->x * qr->z + ql->y * qr->w + ql->z * qr->x;
+	q.z = ql->w * qr->z + ql->x * qr->y - ql->y * qr->x + ql->z * qr->w;
 	return q;
 }
 

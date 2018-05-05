@@ -11,9 +11,21 @@
 #define WINDOW_WIDTH  512
 #define WINDOW_HEIGHT 512
 
+#define APP_QUIT (1)
+
+static bool bScaling = false;
+static int beginX, beginY;
+static quat current, last;
+static GLfloat scaleFactor = 1.0;
+
 static const GLfloat whiteColor[] = { 1.0, 1.0, 1.0, 1.0 };
 static const GLfloat blackColor[] = { 0.0, 0.0, 0.0, 1.0 };
 static const GLfloat blueColor[]  = { 0.0, 0.0, 1.0, 1.0 };
+
+static int width = WINDOW_WIDTH, height = WINDOW_HEIGHT;
+
+static const float R = 0.8;
+static const float ROOT_2_INV = 0.70710678118654752440;
 
 #if 0
 void test(){
@@ -59,6 +71,64 @@ void test(){
 	printf("\n");
 }
 #endif
+
+#define SQR(x) (x*x)
+
+static GLfloat projectPlaneToSphere(GLfloat x, GLfloat y){
+	const GLfloat R = 0.8;
+	GLfloat z,d,d_sqr;
+
+	d_sqr = SQR(x) + SQR(y);
+
+	d = sqrt(d_sqr);
+
+	if(d < R){
+		z = sqrt(2.0*SQR(R) - d_sqr);
+	}
+	else {
+		z = SQR(R)/d;
+	}
+
+	return z;
+}
+
+static quat simulateTrackball(GLfloat p1x, GLfloat p1y, GLfloat p2x, GLfloat p2y){
+	quat q = quat_identity();
+
+	if(p1x == p2x && p1y == p2y){
+		// マウスの移動量がゼロならば
+		q = quat_identity();
+	}
+	else {
+		// マウスの移動量がゼロでないならば
+		quat p1, p2, a, d;
+		float p1z, p2z;
+		float s, t;
+
+		// ベクトルp1はトラックボール移動開始位置
+		p1z = projectPlaneToSphere(p1x, p1y);
+		p1 = quat_set(0.0f, p1x, p1y, p1z);
+
+		// ベクトルp2はトラックボール移動終了位置
+		p2z = projectPlaneToSphere(p2x, p2y);
+		p2 = quat_set(0.0f, p2x, p2y, p2z);
+
+		// トラックボールの回転軸を求める
+		a = quat_mul(&p1, &p2);
+
+		a.w = 0.0;
+		s = quat_norm(&a);
+		a = quat_div_real(s, &a);
+
+		d = quat_sub(&p1, &p2);
+
+		t = quat_norm(&d) / (2.0 * R * ROOT_2_INV);
+		if(t > 1.0) t = 1.0;
+		q = quat_set(cos(asin(t)), a.x*t, a.y*t, a.z*t);
+	}
+
+	return q;
+}
 
 static void draw_frame(void){
 	const float L=0.5;
@@ -125,7 +195,7 @@ static void draw_objects(void){
 		}
 		glEnd();
 	}
-
+	glDisable(GL_CULL_FACE);
 	return;
 }
 
@@ -148,15 +218,23 @@ static void draw(void){
 }
 
 static void displayFunc(void){
-	printf("call displayFunc\n");
+
+	matrix4x4 m;
+
+	//printf("call displayFunc\n");
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
 	glLoadIdentity();
 	gluLookAt(0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
 
+	quat_to_rotation_matrix(&current, m);
+	glScalef(scaleFactor, scaleFactor, scaleFactor);
+	glMultMatrixf(&m[0][0]);
+
 	draw();
 
 	glutSwapBuffers();
+	//printf("exit displayFunc\n");
 	return;
 }
 
@@ -174,6 +252,85 @@ static void reshapeFunc(int w, int h){
 	return;
 }
 
+static void appMenuFunc(int menu){
+	switch(menu){
+	case APP_QUIT:
+		exit(0);
+		break;
+	default:
+		break;
+	}
+	return;
+}
+
+static void mouseEventFunc(int button, int state, int x, int y){
+
+	if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN){
+		beginX = x;
+		beginY = y;
+		//printf("begin (%d,%d)\n", beginX, beginY);
+		if(glutGetModifiers() & GLUT_ACTIVE_SHIFT){
+			bScaling = true;
+		}
+		else {
+			bScaling = false;
+		}
+	}
+
+	return;
+}
+
+static void mouseMotionFunc(int x, int y){
+	static int count = 0;
+	if(bScaling){
+		scaleFactor =
+			scaleFactor * (1.0 + (((float) (beginY - y))/height));
+		beginX = x;
+		beginY = y;
+	}
+	else {
+		quat t;
+
+		last = simulateTrackball( (2.0 * beginX - width) / width,
+								  (height - 2.0 * beginY) / height,
+								  (2.0 * x - width) / width,
+								  (height - 2.0 * y) / height );
+		beginX = x;
+		beginY = y;
+
+		t = quat_mul(&last, &current);
+		current = t;
+
+		if(++count % 97 == 0){
+			GLfloat n;
+			n = quat_norm(&current);
+			current = quat_div_real(n, &current);
+		}
+	}
+	glutPostRedisplay();
+	return;
+}
+
+static void menuFunc(int dummy0){
+	return;
+}
+
+static void initGLUTmenu(void){
+
+	int appMenu;
+
+	appMenu = glutCreateMenu(appMenuFunc);
+	glutAddMenuEntry("Quit (Q)", APP_QUIT);
+
+	glutCreateMenu(menuFunc);
+	glutAddSubMenu("Application", appMenu);
+
+	glutAttachMenu(GLUT_RIGHT_BUTTON);
+
+	return;
+
+}
+
 static void initGLUT(int *argc, char **argv){
 	glutInit(argc, argv);
 
@@ -187,6 +344,11 @@ static void initGLUT(int *argc, char **argv){
 
 	glutDisplayFunc(displayFunc);
 	glutReshapeFunc(reshapeFunc);
+
+	glutMouseFunc(mouseEventFunc);
+	glutMotionFunc(mouseMotionFunc);
+
+	initGLUTmenu();
 
 	return;
 }
@@ -207,6 +369,8 @@ static void initGL(void){
 	glLightfv(GL_LIGHT1, GL_DIFFUSE, whiteColor);
 	glLightfv(GL_LIGHT1, GL_DIFFUSE, light1);
 	glEnable(GL_LIGHT1);
+
+	current = simulateTrackball(0.0,0.0,0.0,0.0);
 
 	return;
 }

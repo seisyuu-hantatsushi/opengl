@@ -1,45 +1,80 @@
-CC  = clang -c
-CXX = clang++ -c
-LD  = clang
+# -*- Makefile -*-
+CC    = clang -c
+CXX   = clang++ -c
+LD    = clang
+STRIP = strip -s
 
-OBJCOPY=objcopy
+OBJCOPY = objcopy
 
-CFLAGS_RELEASE   = -g -O2
-CXXFLAGS_RELEASE = -g -O2
+BIN_DIR  = ./bin
+OBJS_DIR = ./obj
 
-CFLAGS_DEBUG = -g -O0
-CFLAGS_DEBUG = -g -O0
+CFLAGS_RELEASE   = -g3 -Wall -O2
+CXXFLAGS_RELEASE = -g3 -Wall -O2
 
-RELEASE_OBJS_C = ${C_OBJS:.o=.rco}
-RELEASE_OBJS_CXX = ${CXX_OBJS:.o=.rcppo}
+CFLAGS_DEBUG   = -g3 -Wall -O0
+CXXFLAGS_DEBUG = -g3 -Wall -O0
 
-DEBUG_OBJS_C   = ${C_OBJS:.o=.dco}
-DEBUG_OBJS_CXX = ${CXX_OBJS:.o=.dcppo}
+LDFLAGS = -g3 -pthread -lstdc++ -lrt
 
-RELEASE_OBJS = $(RELEASE_OBJS_C) $(RELEASE_OBJS_CXX) $(VERT_OBJS) $(FRAG_OBJS)
-DEBUG_OBJS = $(DEBUG_OBJS_C) $(DEBUG_OBJS_CXX) $(VERT_OBJS) $(FRAG_OBJS)
+RELEASE_OBJS_C   = $(foreach obj, $(C_OBJS), $(OBJS_DIR)/$(subst .o,.rco,$(obj)))
+RELEASE_OBJS_CXX = $(foreach obj, $(CXX_OBJS), $(OBJS_DIR)/$(subst .o,.rcppo,$(obj)))
+
+DEBUG_OBJS_C   = $(foreach obj, $(C_OBJS), $(OBJS_DIR)/$(subst .o,.dco,$(obj)))
+DEBUG_OBJS_CXX = $(foreach obj, $(CXX_OBJS), $(OBJS_DIR)/$(subst .o,.dcppo,$(obj)))
+
+VERT_OBJS_IN_OBJS = $(foreach obj, $(VERT_OBJS), $(OBJS_DIR)/$(subst .vert,.vo,$(obj)))
+FRAG_OBJS_IN_OBJS = $(foreach obj, $(FRAG_OBJS), $(OBJS_DIR)/$(subst .frag,.fo,$(obj)))
+
+RELEASE_OBJS = $(RELEASE_OBJS_C) $(RELEASE_OBJS_CXX) $(VERT_OBJS_IN_OBJS) $(FRAG_OBJS_IN_OBJS)
+DEBUG_OBJS = $(DEBUG_OBJS_C) $(DEBUG_OBJS_CXX)  $(VERT_OBJS_IN_OBJS) $(FRAG_OBJS_IN_OBJS)
+
+RELEASE_OUT = $(BIN_DIR)/$(RELEASE_TARGET)
+DEBUG_OUT = $(BIN_DIR)/$(DEBUG_TARGET)
 
 all: release
 
-release : $(RELEASE_TARGET)
+release : $(RELEASE_OUT)
 
-%.rco: %.c
+debug : $(DEBUG_OUT)
+
+$(OBJS_DIR)/%.rco: %.c
+	@if [ ! -d $(OBJS_DIR) ]; then \
+		mkdir $(OBJS_DIR); \
+	fi;
 	$(CC) $(INCDIRS) $(CFLAGS_RELEASE) $< -o $@
 
-%.rcppo: %.cpp
+$(OBJS_DIR)/%.rcppo: %.cpp
+	@if [ ! -d $(OBJS_DIR) ]; then \
+		mkdir $(OBJS_DIR); \
+	fi;
 	$(CXX) $(INCDIRS) $(CXXFLAGS_RELEASE) $< -o $@
 
-%.dcppo: %.cpp
+$(OBJS_DIR)/%.dcppo: %.cpp
+	@if [ ! -d $(OBJS_DIR) ]; then \
+		mkdir $(OBJS_DIR); \
+	fi;
 	$(CXX) $(INCDIRS) $(CXXFLAGS_DEBUG) $< -o $@
 
-%.dco: %.c
+$(OBJS_DIR)/%.dco: %.c
+	@if [ ! -d $(OBJS_DIR) ]; then \
+		mkdir $(OBJS_DIR); \
+	fi;
 	$(CC) $(INCDIRS) $(CFLAGS_DEBUG) $< -o $@
 
-%.vo: %.vert
+$(OBJS_DIR)/%.vo: %.vert
+	@if [ ! -d $(OBJS_DIR) ]; then \
+		mkdir $(OBJS_DIR); \
+	fi;
 	$(OBJCOPY) --readonly-text -I binary -B i386 -O elf64-x86-64 $< $@
 
-$(RELEASE_TARGET) : $(RELEASE_OBJS)
-	$(LD) $(LIBS) $^ -o $@
+$(RELEASE_OUT) : $(RELEASE_OBJS)
+	@if [ ! -d $(BIN_DIR) ]; then \
+		mkdir $(BIN_DIR); \
+	fi;
+	$(LD) $(LDFLAGS) $(LIBS) $^ -o $@
+	cp $@ $@-symbol
+	$(STRIP) $@
 
 clean:
-	rm -rf $(TARGET) $(RELEASE_OBJS_CXX) *.rco *.dco *.rcppo *.dcppo *.vo *.fo *~
+	rm -rf $(TARGET) $(RELEASE_OBJS_CXX) *.rco *.dco *.rcppo *.dcppo *.vo *.fo *~ $(BIN_DIR) $(OBJS_DIR)

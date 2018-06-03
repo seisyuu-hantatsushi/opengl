@@ -1,7 +1,8 @@
 # -*- Makefile -*-
 CC    = clang -c
 CXX   = clang++ -c
-LD    = clang
+LD    = clang -fuse-ld=lld
+
 STRIP = strip -s
 
 OBJCOPY = objcopy
@@ -15,7 +16,7 @@ CXXFLAGS_RELEASE = -g3 -Wall -O2 $(CXXFLAGS_APPEND)
 CFLAGS_DEBUG   = -g3 -Wall -O0 $(CFLAGS_APPEND)
 CXXFLAGS_DEBUG = -g3 -Wall -O0 $(CXXFLAGS_APPEND)
 
-LDFLAGS = -g3 -pthread -lstdc++ -lrt
+LDFLAGS = -lpthread -lrt -lstdc++
 
 RELEASE_OBJS_C   = $(addprefix $(OBJS_DIR)/,${C_OBJS:.o=.rco})
 RELEASE_OBJS_CXX = $(addprefix $(OBJS_DIR)/,${CXX_OBJS:.o=.rcppo})

@@ -5,7 +5,7 @@ RELEASE_TARGET = $(TARGET)
 
 CC  = clang -c
 CXX = clang++ -c
-LD  = clang
+LD  = clang -fuse-ld=lld
 
 CFLAGS_APPEND = `pkg-config --cflags gtk+-3.0`
 

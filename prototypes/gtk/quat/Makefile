@@ -14,6 +14,6 @@ CXX_OBJS =
 
 SRCS = ${C_OBJS:.co=.c}
 
-LIBS = -lm -lGL -lGLU -lglut `pkg-config --libs gtk+-3.0`
+LIBS = -lm -lGL -lGLU -lGLEW `pkg-config --libs gtk+-3.0`
 
 include ../../Makefile.common

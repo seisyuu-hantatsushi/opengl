@@ -1,43 +1,16 @@
 #include <stdio.h>
+
+#include <GL/glew.h>
 #include <gtk/gtk.h>
 
 typedef struct AppContext {
 	GtkWidget *topWindow;
-	GtkWidget *imageWindow;
+	GtkWidget *glArea;
 } AppContext;
 
 static void cb_button_clicked (GtkWidget *button, gpointer user_data)
 {
 	gtk_main_quit();
-}
-
-static void openFile(GtkWidget *menuitem, gpointer user_data){
-	AppContext *pCtx = (AppContext *)user_data;
-	GtkWidget *dialog;
-	gint ret;
-
-	dialog = gtk_file_chooser_dialog_new("Open File",
-										 pCtx->topWindow,
-										 GTK_FILE_CHOOSER_ACTION_OPEN,
-										 ("_Cancel"),
-										 GTK_RESPONSE_CANCEL,
-										 ("_Open"),
-										 GTK_RESPONSE_ACCEPT,
-										 NULL);
-
-	ret = gtk_dialog_run(GTK_DIALOG(dialog));
-	if(ret == GTK_RESPONSE_ACCEPT){
-		char *filepath;
-		GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
-		filepath = gtk_file_chooser_get_filename(chooser);
-		printf("open file: %s\n", filepath);
-		gtk_image_set_from_file(GTK_IMAGE(pCtx->imageWindow),filepath);
-		g_free(filepath);
-	}
-
-	gtk_widget_destroy(dialog);
-
-	return;
 }
 
 static GtkWidget* createFileMenu(AppContext *pCtx){
@@ -49,15 +22,48 @@ static GtkWidget* createFileMenu(AppContext *pCtx){
 	menu = gtk_menu_new();
 	gtk_menu_item_set_submenu(GTK_MENU_ITEM(root), menu);
 
-	menuitem = gtk_menu_item_new_with_label("Open");
-	gtk_menu_shell_append(GTK_MENU_SHELL(menu), menuitem);
-	g_signal_connect(menuitem, "activate", G_CALLBACK(openFile), pCtx);
-
 	menuitem = gtk_menu_item_new_with_label("Quit");
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), menuitem);
 	g_signal_connect(menuitem, "activate", G_CALLBACK(gtk_main_quit), NULL);
 
 	return root;
+}
+
+static void on_realize(GtkGLArea *area, gpointer user_data){
+	const GLubyte *renderName,*versionStr;
+
+	//printf("on_realize\n");
+
+	// Make current
+	gtk_gl_area_make_current(area);
+
+	glewInit();
+
+	printf("Renderer: %s\n", glGetString(GL_RENDERER));
+	printf("OpenGL Version: %s\n", glGetString(GL_VERSION));
+
+	return;
+}
+
+static gboolean on_render(GtkGLArea *area, GdkGLContext *ctx){
+	printf("on_render\n");
+	return TRUE;
+}
+
+static void on_reize(GtkGLArea *area, gint width, gint height, gpointer user_data){
+	printf("on_reize. (%d,%d)\n", width, height);
+	return;
+}
+
+static GtkWidget* createGLArea(){
+	GtkWidget *glArea = NULL;
+	glArea = gtk_gl_area_new();
+
+	g_signal_connect(glArea, "realize", G_CALLBACK(on_realize), NULL);
+	g_signal_connect(glArea, "render", G_CALLBACK(on_render), NULL);
+	g_signal_connect(glArea, "resize", G_CALLBACK(on_reize), NULL);
+
+	return glArea;
 }
 
 int main(int argc, char **argv){
@@ -81,11 +87,12 @@ int main(int argc, char **argv){
 	gtk_menu_shell_append(GTK_MENU_SHELL(menubar), createFileMenu(&appCtx));
 
 	hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+	gtk_box_set_homogeneous(GTK_BOX(hbox), FALSE);
+	gtk_box_pack_start(GTK_BOX(hbox), gtk_button_new_with_label("Quit"), FALSE, FALSE, 0);
 
-	gtk_box_pack_start(GTK_BOX(hbox), gtk_button_new_with_label("Quit"), TRUE, FALSE, 0);
+	appCtx.glArea = createGLArea();
 
-	appCtx.imageWindow = gtk_image_new();
-	gtk_box_pack_start(GTK_BOX(hbox), appCtx.imageWindow, TRUE, TRUE, 0);
+	gtk_box_pack_start(GTK_BOX(hbox), appCtx.glArea, TRUE, TRUE, 0);
 
 	gtk_box_pack_start(GTK_BOX(vbox), hbox, TRUE, TRUE,  0);
 

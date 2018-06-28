@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <sys/stat.h>
@@ -18,12 +19,12 @@
 
 typedef struct GLProgramShaderSet {
 	GLuint vertextShader;
-	GLuint programShader;
+	GLuint fragmentShader;
 	GLuint programId;
 } GLProgramShaderSet;
 
 typedef struct GLAppContext {
-	GLuint shaderProgram;
+	GLProgramShaderSet programSet;
 } GLAppContext;
 
 typedef struct AppContext {
@@ -35,10 +36,11 @@ typedef struct AppContext {
 
 	GLAppContext glAppCtx;
 
-	GLProgramShaderSet programSet;
-
 } AppContext;
 
+static const GLfloat lightpos[] = { 0.0f, 0.0f, 5.0f, 1.0f }; /* 位置       */
+static const GLfloat lightcol[] = { 1.0f, 1.0f, 1.0f, 1.0f }; /* 直接光強度 */
+static const GLfloat lightamb[] = { 0.1f, 0.1f, 0.1f, 1.0f }; /* 環境光強度 */
 
 static void readGLError(const char *message){
 	GLenum error = glGetError();
@@ -100,9 +102,10 @@ static const char *readShaderCode(const char *pFile){
 		goto error_exit;
 	}
 
-	readsize = fread(pShaderCode, stbuf.st_size, sizeof(char), fp);
+	readsize = fread(pShaderCode, sizeof(char), stbuf.st_size, fp);
 	if(readsize < stbuf.st_size){
 		int lastError = errno;
+		fprintf(stderr, "readsize %zd\n", readsize);
 		fprintf(stderr, "short of code %s. <%s>\n", pFile, strerror(lastError));
 	}
 
@@ -122,7 +125,94 @@ static const char *readShaderCode(const char *pFile){
 static int32_t creareProgramShader(const char *pVertexShaderCode,
 								   const char *pFragmentShaderCode,
 								   GLProgramShaderSet *pProgramSet){
-	return 0;
+	int ret = 0;
+	GLint compiled;
+	GLsizei size,len;
+
+	pProgramSet->vertextShader  = 0;
+	pProgramSet->fragmentShader = 0;
+	pProgramSet->programId      = 0;
+
+	if(pVertexShaderCode != NULL){
+		GLint length = strlen(pVertexShaderCode);
+		const GLchar **ppCode = &pVertexShaderCode;
+		const GLint  *pLengths = &length;
+
+		pProgramSet->vertextShader = glCreateShader(GL_VERTEX_SHADER);
+		if(pProgramSet->vertextShader == 0){
+			readGLError("failed to create vertex shader");
+			ret = -1;
+			goto error_exit;
+		}
+		glShaderSource(pProgramSet->vertextShader, 1, ppCode, pLengths);
+		glCompileShader(pProgramSet->vertextShader);
+		glGetShaderiv(pProgramSet->vertextShader, GL_COMPILE_STATUS, &compiled);
+		if(compiled == GL_FALSE){
+			fprintf(stderr, "failed to compile\n");
+			glGetProgramiv(pProgramSet->vertextShader, GL_INFO_LOG_LENGTH, &size);
+			if(size > 0){
+				char *pBuf;
+				pBuf = (char *)malloc(size+1);
+				glGetShaderInfoLog(pProgramSet->vertextShader, size, &len, pBuf);
+				fprintf(stderr, "%s\n", pBuf);
+				free(pBuf);
+			}
+			ret = -1;
+			goto error_exit;
+		}
+	}
+
+	if(pFragmentShaderCode != NULL){
+		
+	}
+
+	pProgramSet->programId = glCreateProgram();
+	if(pProgramSet->programId == 0){
+		fprintf(stderr, "failed to create program.\n");
+		goto error_exit;
+	}
+
+	if(pProgramSet->vertextShader != 0){
+		glAttachShader(pProgramSet->programId, pProgramSet->vertextShader);
+	}
+
+	if(pProgramSet->fragmentShader != 0){
+		glAttachShader(pProgramSet->programId, pProgramSet->fragmentShader);
+	}
+
+	glLinkProgram(pProgramSet->programId);
+	{
+		GLuint linked;
+		glGetProgramiv(pProgramSet->programId, GL_LINK_STATUS, &linked);
+		if(linked == GL_FALSE){
+			char *pInfoLog;
+			fprintf(stderr, "failed to link shader\n");
+			glGetProgramiv( pProgramSet->programId, GL_INFO_LOG_LENGTH, &size );
+			if ( size > 0 ) {
+				pInfoLog = (char *)malloc(size);
+				glGetProgramInfoLog( pProgramSet->programId, size, &len, pInfoLog );
+				printf("%s\n",pInfoLog);
+				free(pInfoLog);
+			}
+		}
+	}
+	return ret;
+
+ error_exit:
+
+	if(pProgramSet->fragmentShader != 0){
+		glDeleteShader(pProgramSet->fragmentShader);
+	}
+
+	if(pProgramSet->vertextShader != 0){
+		glDeleteShader(pProgramSet->vertextShader);
+	}
+
+	if(pProgramSet->programId != 0){
+		glDeleteProgram(pProgramSet->programId);
+	}
+
+	return ret;
 }
 
 static int32_t destroyProgramShader(GLProgramShaderSet *pProgramSet){
@@ -131,7 +221,7 @@ static int32_t destroyProgramShader(GLProgramShaderSet *pProgramSet){
 
 static void on_realize(GtkGLArea *area, gpointer user_data){
 	AppContext *appCtx = (AppContext *)user_data;
-	GdkGLContext *glCtx;
+	GLAppContext *glAppCtx = &appCtx->glAppCtx;
 	GError *pError;
 	GLenum glResult;
 	const char *pShaderCode;
@@ -157,6 +247,20 @@ static void on_realize(GtkGLArea *area, gpointer user_data){
 
 	printf("%s\n", pShaderCode);
 
+	creareProgramShader(pShaderCode, NULL, &glAppCtx->programSet);
+
+	/* 初期設定 */
+	glClearColor(0.3, 0.3, 1.0, 0.0);
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+
+	/* 光源の初期設定 */
+	glEnable(GL_LIGHTING);
+	glEnable(GL_LIGHT0);
+	glLightfv(GL_LIGHT0, GL_DIFFUSE, lightcol);
+	glLightfv(GL_LIGHT0, GL_SPECULAR, lightcol);
+	glLightfv(GL_LIGHT0, GL_AMBIENT, lightamb);
+	glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);
 
 	free(pShaderCode);
 	return;
@@ -167,6 +271,24 @@ static void on_unrealize(GtkGLArea *area, gpointer user_data){
 }
 
 static gboolean on_render(GtkGLArea *area, GdkGLContext *ctx, gpointer user_data){
+	AppContext *appCtx = (AppContext *)(user_data);
+	GLAppContext *glAppCtx = &appCtx->glAppCtx;
+
+	printf("on_render\n");
+
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glUseProgram(glAppCtx->programSet.programId);
+	glBegin(GL_TRIANGLES);
+	glColor3d(1.0, 0.0, 0.0);
+	glVertex2d(0.9*cos(0.0), 0.9*sin(0.0));
+	glColor3d(0.0, 1.0, 0.0);
+	glVertex2d(0.9*cos(2.0*M_PI/3.0), 0.9*sin(2.0*M_PI/3.0));
+	glColor3d(0.0, 0.0, 1.0);
+	glVertex2d(0.9*cos(2.0*M_PI*2.0/3.0), 0.9*sin(2.0*M_PI*2.0/3.0));
+	glEnd();
+	glUseProgram(0);
+	glFlush();
 
 	return TRUE;
 }

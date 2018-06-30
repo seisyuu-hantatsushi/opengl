@@ -163,7 +163,35 @@ static int32_t creareProgramShader(const char *pVertexShaderCode,
 	}
 
 	if(pFragmentShaderCode != NULL){
-		
+		GLint length = strlen(pFragmentShaderCode);
+		const GLchar **ppCode = &pFragmentShaderCode;
+		const GLint  *pLengths = &length;
+
+		pProgramSet->fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+		if(pProgramSet->fragmentShader == 0){
+			readGLError("failed to create fragment shader");
+			ret = -1;
+			goto error_exit;
+		}
+		glShaderSource(pProgramSet->fragmentShader, 1, ppCode, pLengths);
+		glCompileShader(pProgramSet->fragmentShader);
+		glGetShaderiv(pProgramSet->fragmentShader, GL_COMPILE_STATUS, &compiled);
+		if(compiled == GL_FALSE){
+			fprintf(stderr, "failed to compile fragment shader\n");
+			glGetProgramiv(pProgramSet->fragmentShader, GL_INFO_LOG_LENGTH, &size);
+			if(size > 0){
+				char *pBuf;
+				pBuf = (char *)malloc(size+1);
+				glGetShaderInfoLog(pProgramSet->fragmentShader, size, &len, pBuf);
+				fprintf(stderr, "%s\n", pBuf);
+				free(pBuf);
+			}
+			ret = -1;
+			goto error_exit;
+		}
+		else {
+			fprintf(stderr, "success to compile fragment shader.\n");
+		}
 	}
 
 	pProgramSet->programId = glCreateProgram();
@@ -195,6 +223,9 @@ static int32_t creareProgramShader(const char *pVertexShaderCode,
 				free(pInfoLog);
 			}
 		}
+		else {
+			fprintf(stderr, "success to link shader to program.\n");
+		}
 	}
 	return ret;
 
@@ -224,7 +255,7 @@ static void on_realize(GtkGLArea *area, gpointer user_data){
 	GLAppContext *glAppCtx = &appCtx->glAppCtx;
 	GError *pError;
 	GLenum glResult;
-	const char *pShaderCode;
+	const char *pVertexShaderCode=NULL, *pFragmentShaderCode=NULL;
 	size_t readsize;
 
 	printf("on_realize\n");
@@ -243,11 +274,10 @@ static void on_realize(GtkGLArea *area, gpointer user_data){
 	printf("OpenGL Version: %s\n", glGetString(GL_VERSION));
 	printf("GLSL version: %s\n",   glGetString(GL_SHADING_LANGUAGE_VERSION));
 
-	pShaderCode = readShaderCode("./triangle.vert");
+	pVertexShaderCode   = readShaderCode("./simple.vert");
+	pFragmentShaderCode = readShaderCode("./simple.frag");
 
-	printf("%s\n", pShaderCode);
-
-	creareProgramShader(pShaderCode, NULL, &glAppCtx->programSet);
+	creareProgramShader(pVertexShaderCode, pFragmentShaderCode, &glAppCtx->programSet);
 
 	/* 初期設定 */
 	glClearColor(0.3, 0.3, 1.0, 0.0);
@@ -262,7 +292,8 @@ static void on_realize(GtkGLArea *area, gpointer user_data){
 	glLightfv(GL_LIGHT0, GL_AMBIENT, lightamb);
 	glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);
 
-	free(pShaderCode);
+	free(pFragmentShaderCode);
+	free(pVertexShaderCode);
 	return;
 }
 
@@ -276,9 +307,21 @@ static gboolean on_render(GtkGLArea *area, GdkGLContext *ctx, gpointer user_data
 
 	printf("on_render\n");
 
-	glClear(GL_COLOR_BUFFER_BIT);
+	/* 画面クリア */
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	/* 光源の位置を設定 */
+	glLightfv(GL_LIGHT0, GL_POSITION, lightpos);
 
 	glUseProgram(glAppCtx->programSet.programId);
+
+	/* モデルビュー変換行列の初期化 */
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	/* 視点の移動（物体の方を奥に移動）*/
+	glTranslated(0.0, 0.0, -3.0);
+#if 0
 	glBegin(GL_TRIANGLES);
 	glColor3d(1.0, 0.0, 0.0);
 	glVertex2d(0.9*cos(0.0), 0.9*sin(0.0));
@@ -287,6 +330,27 @@ static gboolean on_render(GtkGLArea *area, GdkGLContext *ctx, gpointer user_data
 	glColor3d(0.0, 0.0, 1.0);
 	glVertex2d(0.9*cos(2.0*M_PI*2.0/3.0), 0.9*sin(2.0*M_PI*2.0/3.0));
 	glEnd();
+#else
+	{
+		static const GLfloat diffuse[] = { 0.6f, 0.1f, 0.1f, 1.0f };
+		static const GLfloat specular[] = { 0.3f, 0.3f, 0.3f, 1.0f };
+
+		printf("set material\n");
+		/* 材質の設定 */
+		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, diffuse);
+		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specular);
+		glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100.0f);
+	
+		/* 1枚の4角形を描く */
+		glNormal3d(0.0, 0.0, 1.0);
+		glBegin(GL_QUADS);
+		glVertex3d(-1.0, -1.0,  0.0);
+		glVertex3d( 1.0, -1.0,  0.0);
+		glVertex3d( 1.0,  1.0,  0.0);
+		glVertex3d(-1.0,  1.0,  0.0);
+		glEnd();
+	}
+#endif
 	glUseProgram(0);
 	glFlush();
 
@@ -297,6 +361,14 @@ static void on_resize(GtkGLArea *area, gint width, gint height, gpointer user_da
 	AppContext *appCtx =
 		(AppContext *)(user_data);
 	printf("on_resize\n");
+
+	glViewport(0,0,width, height);
+	/* 透視変換行列の指定 */
+	glMatrixMode(GL_PROJECTION);
+
+	/* 透視変換行列の初期化 */
+	glLoadIdentity();
+	gluPerspective(60.0, (double)width / (double)height, 1.0, 100.0);
 
 	return;
 }
@@ -335,7 +407,7 @@ int main(int argc, char **argv){
 		   appCtx.gktVersion[0],appCtx.gktVersion[1],appCtx.gktVersion[2]);
 	appCtx.topWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 
-	gtk_window_set_title(GTK_WINDOW(appCtx.topWindow), "Gears");
+	gtk_window_set_title(GTK_WINDOW(appCtx.topWindow), "Triangle");
 	gtk_widget_set_size_request(appCtx.topWindow, 300, 200);
 	gtk_container_set_border_width(GTK_CONTAINER(appCtx.topWindow), 2);
 

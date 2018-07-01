@@ -18,15 +18,9 @@
 
 #include <math.h>
 
-typedef struct GLProgramShaderSet {
-	GLuint vertextShader;
-	GLuint fragmentShader;
-	GLuint programId;
-} GLProgramShaderSet;
-
 typedef struct GLDrawContext {
 	GLfloat rotate;
-	GLProgramShaderSet programShaderSet;
+	GLuint programId;
 } GLDrawContext;
 
 static void readGLError(const char *message){
@@ -96,37 +90,38 @@ static const char *readShaderCode(const char *pFile){
 
 static int32_t creareProgramShader(const char *pVertexShaderCode,
 								   const char *pFragmentShaderCode,
-								   GLProgramShaderSet *pProgramSet){
+								   GLuint *pProgramId){
 	int ret = 0;
 	GLint compiled;
 	GLsizei size,len;
 
-	pProgramSet->vertextShader  = 0;
-	pProgramSet->fragmentShader = 0;
-	pProgramSet->programId      = 0;
+	GLuint vertextShader=0;
+	GLuint fragmentShader=0;
+
+	*pProgramId = 0;
 
 	if(pVertexShaderCode != NULL){
 		GLint length = strlen(pVertexShaderCode);
 		const GLchar **ppCode = &pVertexShaderCode;
 		const GLint  *pLengths = &length;
 
-		pProgramSet->vertextShader = glCreateShader(GL_VERTEX_SHADER);
-		if(pProgramSet->vertextShader == 0){
+		vertextShader = glCreateShader(GL_VERTEX_SHADER);
+		if(vertextShader == 0){
 			readGLError("failed to create vertex shader");
 			ret = -1;
 			goto error_exit;
 		}
-		glShaderSource(pProgramSet->vertextShader, 1, ppCode, pLengths);
-		glCompileShader(pProgramSet->vertextShader);
-		glGetShaderiv(pProgramSet->vertextShader, GL_COMPILE_STATUS, &compiled);
+		glShaderSource(vertextShader, 1, ppCode, pLengths);
+		glCompileShader(vertextShader);
+		glGetShaderiv(vertextShader, GL_COMPILE_STATUS, &compiled);
 		if(compiled == GL_FALSE){
 			fprintf(stderr, "failed to compile vertex shader.\n");
-			glGetProgramiv(pProgramSet->vertextShader, GL_INFO_LOG_LENGTH, &size);
+			glGetProgramiv(vertextShader, GL_INFO_LOG_LENGTH, &size);
 			fprintf(stderr, "info size: %d\n", size);
 			if(size > 0){
 				char *pBuf;
 				pBuf = (char *)malloc(size+1);
-				glGetShaderInfoLog(pProgramSet->vertextShader, size, &len, pBuf);
+				glGetShaderInfoLog(vertextShader, size, &len, pBuf);
 				fprintf(stderr, "%s\n", pBuf);
 				free(pBuf);
 			}
@@ -140,23 +135,23 @@ static int32_t creareProgramShader(const char *pVertexShaderCode,
 		const GLchar **ppCode = &pFragmentShaderCode;
 		const GLint  *pLengths = &length;
 
-		pProgramSet->fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-		if(pProgramSet->fragmentShader == 0){
+		fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+		if(fragmentShader == 0){
 			readGLError("failed to create fragment shader");
 			ret = -1;
 			goto error_exit;
 		}
-		glShaderSource(pProgramSet->fragmentShader, 1, ppCode, pLengths);
-		glCompileShader(pProgramSet->fragmentShader);
-		glGetShaderiv(pProgramSet->fragmentShader, GL_COMPILE_STATUS, &compiled);
+		glShaderSource(fragmentShader, 1, ppCode, pLengths);
+		glCompileShader(fragmentShader);
+		glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &compiled);
 		if(compiled == GL_FALSE){
 			fprintf(stderr, "failed to compile fragment shader\n");
-			glGetProgramiv(pProgramSet->fragmentShader, GL_INFO_LOG_LENGTH, &size);
+			glGetProgramiv(fragmentShader, GL_INFO_LOG_LENGTH, &size);
 			fprintf(stderr, "info size: %d\n", size);
 			if(size > 0){
 				char *pBuf;
 				pBuf = (char *)malloc(size+1);
-				glGetShaderInfoLog(pProgramSet->fragmentShader, size, &len, pBuf);
+				glGetShaderInfoLog(fragmentShader, size, &len, pBuf);
 				fprintf(stderr, "%s\n", pBuf);
 				free(pBuf);
 			}
@@ -168,35 +163,39 @@ static int32_t creareProgramShader(const char *pVertexShaderCode,
 		}
 	}
 
-	pProgramSet->programId = glCreateProgram();
-	if(pProgramSet->programId == 0){
+	*pProgramId = glCreateProgram();
+	if(*pProgramId == 0){
 		fprintf(stderr, "failed to create program.\n");
 		goto error_exit;
 	}
 
-	if(pProgramSet->vertextShader != 0){
-		glAttachShader(pProgramSet->programId, pProgramSet->vertextShader);
+	if(vertextShader != 0){
+		glAttachShader(*pProgramId, vertextShader);
+		glDeleteShader(vertextShader);
 	}
 
-	if(pProgramSet->fragmentShader != 0){
-		glAttachShader(pProgramSet->programId, pProgramSet->fragmentShader);
+	if(fragmentShader != 0){
+		glAttachShader(*pProgramId, fragmentShader);
+		glDeleteShader(fragmentShader);
 	}
 
-	glLinkProgram(pProgramSet->programId);
+	glLinkProgram(*pProgramId);
 	{
 		GLint linked;
-		glGetProgramiv(pProgramSet->programId, GL_LINK_STATUS, &linked);
+		glGetProgramiv(*pProgramId, GL_LINK_STATUS, &linked);
 		if(linked == GL_FALSE){
 			char *pInfoLog;
 			fprintf(stderr, "failed to link shader\n");
-			glGetProgramiv( pProgramSet->programId, GL_INFO_LOG_LENGTH, &size );
+			glGetProgramiv(*pProgramId, GL_INFO_LOG_LENGTH, &size );
 			fprintf(stderr, "info size: %d\n", size);
 			if ( size > 0 ) {
 				pInfoLog = (char *)malloc(size);
-				glGetProgramInfoLog( pProgramSet->programId, size, &len, pInfoLog );
+				glGetProgramInfoLog( *pProgramId, size, &len, pInfoLog );
 				printf("%s\n",pInfoLog);
 				free(pInfoLog);
 			}
+			ret = -1;
+			goto error_exit;
 		}
 		else {
 			fprintf(stderr, "success to link shader to program.\n");
@@ -206,33 +205,25 @@ static int32_t creareProgramShader(const char *pVertexShaderCode,
 
  error_exit:
 
-	if(pProgramSet->fragmentShader != 0){
-		glDeleteShader(pProgramSet->fragmentShader);
+	if(fragmentShader != 0){
+		glDeleteShader(fragmentShader);
 	}
 
-	if(pProgramSet->vertextShader != 0){
-		glDeleteShader(pProgramSet->vertextShader);
+	if(vertextShader != 0){
+		glDeleteShader(vertextShader);
 	}
 
-	if(pProgramSet->programId != 0){
-		glDeleteProgram(pProgramSet->programId);
+	if(*pProgramId != 0){
+		glDeleteProgram(*pProgramId);
 	}
 
 	return ret;
 }
 
-static int32_t destroyProgramShader(GLProgramShaderSet *pProgramSet){
+static int32_t destroyProgramShader(GLuint programId){
 
-	if(pProgramSet->fragmentShader != 0){
-		glDeleteShader(pProgramSet->fragmentShader);
-	}
-
-	if(pProgramSet->vertextShader != 0){
-		glDeleteShader(pProgramSet->vertextShader);
-	}
-
-	if(pProgramSet->programId != 0){
-		glDeleteProgram(pProgramSet->programId);
+	if(programId != 0){
+		glDeleteProgram(programId);
 	}
 
 	return 0;
@@ -245,8 +236,7 @@ static void initShader(GLDrawContext *pCtx){
 	pVertexShaderCode   = readShaderCode("./simple.vert");
 	pFragmentShaderCode = readShaderCode("./simple.frag");
 
-	creareProgramShader(pVertexShaderCode, pFragmentShaderCode, &pCtx->programShaderSet);
-
+	creareProgramShader(pVertexShaderCode, pFragmentShaderCode, &pCtx->programId);
 	if(pFragmentShaderCode != NULL){
 		free((void *)pFragmentShaderCode);
 	}
@@ -264,7 +254,7 @@ static void redraw( Display *dpy, Window w, GLDrawContext *pCtx )
 	const GLfloat scale = 0.40;
 	//printf("Redraw event\n");
 
-	glUseProgram(pCtx->programShaderSet.programId);
+	glUseProgram(pCtx->programId);
 
 	glClear( GL_COLOR_BUFFER_BIT );
 
@@ -425,7 +415,7 @@ int main( int argc, char *argv[] )
 
 	event_loop( dpy, win, &ctx );
 
-	destroyProgramShader(&ctx.programShaderSet);
+	destroyProgramShader(ctx.programId);
 
 	return 0;
 }

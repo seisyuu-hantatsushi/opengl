@@ -1,5 +1,6 @@
 
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,19 +10,61 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <time.h>
+
 #include <errno.h>
 
 #include <GL/glew.h>
 #include <GL/glx.h>
 
-#include <time.h>
-
 #include <math.h>
 
+#include <getopt.h>
+
 typedef struct GLDrawContext {
+	uint32_t glslversion;
 	GLfloat rotate;
 	GLuint programId;
 } GLDrawContext;
+
+static const struct option long_options[] = {
+	{"help",    no_argument,       NULL, 'h'},
+	{"version", required_argument, NULL, 'v'},
+	{NULL,      0,                 NULL,  0 }
+};
+
+
+static void showHelp(){
+	fprintf(stderr, "-h,--help: this help.\n");
+	fprintf(stderr, "-v,--version: specified glsl version {120|150}\n");
+	return;
+}
+
+#define HELP_MODE 1
+static int parseOption(int argc, char **argv, GLDrawContext *pCtx){
+	int ret = 0;
+	int c,opt_index;
+	for(;;){
+		c = getopt_long(argc, argv, "v:h", long_options, &opt_index);
+		if(c == -1){
+			// normal exit
+			break;
+		}
+		else if(c == 'v'){
+			char *pEnd = NULL;
+			pCtx->glslversion = strtol(optarg, &pEnd, 10);
+			if(optarg[0] != '\0' && *pEnd == '\0'){
+				printf("glsl version: %u\n", pCtx->glslversion);
+			}
+			else {
+				fprintf(stderr, "version option is invalid\n");
+				ret = HELP_MODE;
+			}
+		}
+	}
+	return ret;
+}
+
 
 static void readGLError(const char *message){
 	GLenum error = glGetError();
@@ -233,8 +276,20 @@ static void initShader(GLDrawContext *pCtx){
 	const char *pVertexShaderCode = NULL;
 	const char *pFragmentShaderCode = NULL;
 
-	pVertexShaderCode   = readShaderCode("./simple.vert");
-	pFragmentShaderCode = readShaderCode("./simple.frag");
+	const char *pVertexShaderPath;
+	const char *pFragmentShaderPath;
+
+	if(pCtx->glslversion == 120){
+		pVertexShaderPath    = "./simple_120.vert";
+		pFragmentShaderPath  = "./simple_120.frag";
+	}
+	else {
+		pVertexShaderPath    = "./simple_150.vert";
+		pFragmentShaderPath  = "./simple_150.frag";
+	}
+
+	pVertexShaderCode   = readShaderCode(pVertexShaderPath);
+	pFragmentShaderCode = readShaderCode(pFragmentShaderPath);
 
 	creareProgramShader(pVertexShaderCode, pFragmentShaderCode, &pCtx->programId);
 	if(pFragmentShaderCode != NULL){
@@ -386,11 +441,25 @@ static void event_loop( Display *dpy, Window win,  GLDrawContext *pGLDrawCtx )
 
 int main( int argc, char *argv[] )
 {
+	int32_t ret;
 	Display *dpy;
 	Window win;
 	GLDrawContext ctx;
 
 	memset(&ctx, 0x00, sizeof(ctx));
+	ctx.glslversion = 120;
+
+	ret = parseOption(argc, argv, &ctx);
+	if(ret != 0){
+		showHelp();
+		return 1;
+	}
+
+	if(ctx.glslversion != 150 &&
+	   ctx.glslversion != 120){
+		showHelp();
+		return 1;
+	}
 
 	dpy = XOpenDisplay(NULL);
 

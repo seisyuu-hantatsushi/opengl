@@ -14,18 +14,12 @@
 
 #include <errno.h>
 
-#include <GL/glew.h>
-#include <GL/glx.h>
-
-#include <math.h>
-
 #include <getopt.h>
 
-typedef struct GLDrawContext {
-	uint32_t glslversion;
-	GLfloat rotate;
-	GLuint programId;
-} GLDrawContext;
+#include "gldrawcontext.h"
+
+extern void glsl120_resize( unsigned int width, unsigned int height, GLDrawContext *pCtx);
+extern void glsl120_redraw( Display *dpy, Window w, GLDrawContext *pCtx );
 
 static const struct option long_options[] = {
 	{"help",    no_argument,       NULL, 'h'},
@@ -50,6 +44,9 @@ static int parseOption(int argc, char **argv, GLDrawContext *pCtx){
 			// normal exit
 			break;
 		}
+		else if(c == 'h'){
+			ret = HELP_MODE;
+		}
 		else if(c == 'v'){
 			char *pEnd = NULL;
 			pCtx->glslversion = strtol(optarg, &pEnd, 10);
@@ -64,7 +61,6 @@ static int parseOption(int argc, char **argv, GLDrawContext *pCtx){
 	}
 	return ret;
 }
-
 
 static void readGLError(const char *message){
 	GLenum error = glGetError();
@@ -159,7 +155,7 @@ static int32_t creareProgramShader(const char *pVertexShaderCode,
 		glGetShaderiv(vertextShader, GL_COMPILE_STATUS, &compiled);
 		if(compiled == GL_FALSE){
 			fprintf(stderr, "failed to compile vertex shader.\n");
-			glGetProgramiv(vertextShader, GL_INFO_LOG_LENGTH, &size);
+			glGetShaderiv(vertextShader, GL_INFO_LOG_LENGTH, &size);
 			fprintf(stderr, "info size: %d\n", size);
 			if(size > 0){
 				char *pBuf;
@@ -189,7 +185,7 @@ static int32_t creareProgramShader(const char *pVertexShaderCode,
 		glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &compiled);
 		if(compiled == GL_FALSE){
 			fprintf(stderr, "failed to compile fragment shader\n");
-			glGetProgramiv(fragmentShader, GL_INFO_LOG_LENGTH, &size);
+			glGetShaderiv(fragmentShader, GL_INFO_LOG_LENGTH, &size);
 			fprintf(stderr, "info size: %d\n", size);
 			if(size > 0){
 				char *pBuf;
@@ -303,55 +299,6 @@ static void initShader(GLDrawContext *pCtx){
 	return;
 }
 
-static void redraw( Display *dpy, Window w, GLDrawContext *pCtx )
-{
-
-	const GLfloat scale = 0.40;
-	//printf("Redraw event\n");
-
-	glUseProgram(pCtx->programId);
-
-	glClear( GL_COLOR_BUFFER_BIT );
-
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	//視点の設定 (0.0, 0.0, 1.0)の場所
-	//           (0.0, 0.0, 0.0)の方向を向いて,
-	//           (0.0, 1.0, 0.0)が上方向
-	gluLookAt(0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
-
-	//回転を加える.
-	glRotatef(pCtx->rotate,0.0,0.0,-1.0);
-	//縮小する.
-	glScalef(scale,scale,scale);
-
-	// 三角形を書く
-	glBegin(GL_TRIANGLES);
-	glColor3d(1.0, 0.0, 0.0);
-	glVertex3d(cos(M_PI/2), 0.9*sin(M_PI/2), 0.0);
-	glColor3d(0.0, 1.0, 0.0);
-	glVertex3d(cos(M_PI/2+2.0*M_PI/3.0), sin(M_PI/2+2.0*M_PI/3.0), 0.0);
-	glColor3d(0.0, 0.0, 1.0);
-	glVertex3d(cos(M_PI/2+2.0*M_PI*2.0/3.0), sin(M_PI/2+2.0*M_PI*2.0/3.0), 0.0);
-	glEnd();
-	glFlush();
-
-	glUseProgram(0);
-
-	glXSwapBuffers( dpy, w );
-
-}
-
-static void resize( unsigned int width, unsigned int height )
-{
-	printf("Resize event\n");
-	glViewport( 0, 0, width, height );
-	glMatrixMode( GL_PROJECTION );
-	glLoadIdentity();
-	gluPerspective(45.0, (double)width / (double)height, 1.0, 100.0);
-	//glOrtho( -1.0, 1.0, -1.0, 1.0, -1.0, 1.0 );
-}
-
 static Window make_rgb_db_window( Display *dpy,
 				  unsigned int width, unsigned int height )
 {
@@ -422,12 +369,12 @@ static void event_loop( Display *dpy, Window win,  GLDrawContext *pGLDrawCtx )
 			case Expose:
 				break;
 			case ConfigureNotify:
-				resize( event.xconfigure.width, event.xconfigure.height );
+				pGLDrawCtx->pResize( event.xconfigure.width, event.xconfigure.height, pGLDrawCtx );
 				break;
 			}
 		}
 
-		redraw( dpy, win, pGLDrawCtx );
+		pGLDrawCtx->pRedraw( dpy, win, pGLDrawCtx );
 		clock_gettime(CLOCK_MONOTONIC, &now);
 		if(now.tv_sec != prev.tv_sec){
 			pGLDrawCtx->rotate += 6.0;
@@ -448,7 +395,8 @@ int main( int argc, char *argv[] )
 
 	memset(&ctx, 0x00, sizeof(ctx));
 	ctx.glslversion = 120;
-
+	ctx.pResize = glsl120_resize;
+	ctx.pRedraw = glsl120_redraw;
 	ret = parseOption(argc, argv, &ctx);
 	if(ret != 0){
 		showHelp();

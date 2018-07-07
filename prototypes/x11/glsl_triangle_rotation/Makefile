@@ -9,7 +9,9 @@ LD  = clang -fuse-ld=lld
 
 CFLAGS_APPEND =
 
-C_OBJS = main.o
+C_OBJS  = main.o
+C_OBJS += glsl120_draw.o
+
 CXX_OBJS =
 
 SRCS = ${C_OBJS:.co=.c}

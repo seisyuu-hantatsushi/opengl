@@ -157,7 +157,7 @@ static int32_t createProgramShader(const char *pVertexShaderCode,
 		glCompileShader(pProgramSet->vertextShader);
 		glGetShaderiv(pProgramSet->vertextShader, GL_COMPILE_STATUS, &compiled);
 		if(compiled == GL_FALSE){
-			fprintf(stderr, "failed to compile\n");
+			fprintf(stderr, "failed to compile vertex shader\n");
 			glGetProgramiv(pProgramSet->vertextShader, GL_INFO_LOG_LENGTH, &size);
 			if(size > 0){
 				char *pBuf;
@@ -261,15 +261,8 @@ static int32_t destroyProgramShader(GLProgramShaderSet *pProgramSet){
 }
 
 struct vertex_info {
-  float position[3];
-  float color[3];
-};
-
-/* the vertex data is constant */
-static const struct vertex_info vertex_data[] = {
-  { {  0.0f,  0.500f, 0.0f }, { 1.f, 0.f, 0.f } },
-  { {  0.5f, -0.366f, 0.0f }, { 0.f, 1.f, 0.f } },
-  { { -0.5f, -0.366f, 0.0f }, { 0.f, 0.f, 1.f } },
+  GLfloat position[3];
+  GLfloat color[4];
 };
 
 static void
@@ -327,6 +320,13 @@ static void on_realize(GtkGLArea *area, gpointer user_data){
 	const char *pVertexShaderCode=NULL, *pFragmentShaderCode=NULL;
 	size_t readsize;
 
+	/* the vertex data is constant */
+	struct vertex_info vertex_data[] = {
+		{ {cos(M_PI/2),                  sin(M_PI/2),              0.0 }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+		{ {cos(M_PI/2+1.0*2.0*M_PI/3.0), sin(M_PI/2+1.0*2.0*M_PI/3.0), 0.0 }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+		{ {cos(M_PI/2+2.0*2.0*M_PI/3.0), sin(M_PI/2+2.0*2.0*M_PI/3.0), 0.0 }, { 0.0f, 0.0f, 1.0f, 1.0f } },
+	};
+
 	printf("on_realize\n");
 
 	// Make current
@@ -365,7 +365,7 @@ static void on_realize(GtkGLArea *area, gpointer user_data){
 						  (GLvoid*)(G_STRUCT_OFFSET(struct vertex_info, position)));
 
 	glEnableVertexAttribArray(glAppCtx->colorIndex);
-	glVertexAttribPointer(glAppCtx->colorIndex, 3, GL_FLOAT, GL_FALSE,
+	glVertexAttribPointer(glAppCtx->colorIndex, 4, GL_FLOAT, GL_FALSE,
 						  sizeof(struct vertex_info),
 						  (GLvoid*)(G_STRUCT_OFFSET(struct vertex_info, color)));
 
@@ -373,7 +373,7 @@ static void on_realize(GtkGLArea *area, gpointer user_data){
 	glBindVertexArray(0);
 
 	//glDeleteBuffers(1, &glAppCtx->vertexBufferObject);
-	
+
 	/* 初期設定 */
 	glClearColor(0.3, 0.3, 1.0, 0.0);
 	glEnable(GL_DEPTH_TEST);
@@ -408,9 +408,6 @@ static gboolean on_render(GtkGLArea *area, GdkGLContext *ctx, gpointer user_data
 	/* 光源の位置を設定 */
 	glLightfv(GL_LIGHT0, GL_POSITION, lightpos);
 
-	/* Model View Project Matrixを計算 */
-	compute_mvp(glAppCtx->mvp, 0.0, 0.0, 0.0);
-
 	glUseProgram(glAppCtx->programSet.programId);
 	glUniformMatrix4fv(glAppCtx->mvpIndex, 1, GL_FALSE, &(glAppCtx->mvp[0]));
 
@@ -428,16 +425,13 @@ static gboolean on_render(GtkGLArea *area, GdkGLContext *ctx, gpointer user_data
 static void on_resize(GtkGLArea *area, gint width, gint height, gpointer user_data){
 	AppContext *appCtx =
 		(AppContext *)(user_data);
+	GLAppContext *glAppCtx = &appCtx->glAppCtx;
+
 	printf("on_resize\n");
+	glViewport(0, 0, width, height);
 
-	//glViewport(0,0,width, height);
-	/* 透視変換行列の指定 */
-	//glMatrixMode(GL_PROJECTION);
-
-	/* 透視変換行列の初期化 */
-	//glLoadIdentity();
-	//glOrtho( -1.0, 1.0, -1.0, 1.0, -1.0, 1.0 );
-	//gluPerspective(60.0, (double)width / (double)height, 1.0, 100.0);
+	/* Model View Project Matrixを計算 */
+	compute_mvp(glAppCtx->mvp, 0.0, 0.0, 0.0);
 
 	return;
 }

@@ -25,6 +25,15 @@ typedef struct GLProgramShaderSet {
 
 typedef struct GLAppContext {
 	GLProgramShaderSet programSet;
+	GLuint vertexArrayObject;
+	GLuint vertexBufferObject;
+	GLint mvpIndex;
+	GLint positionIndex;
+	GLint colorIndex;
+
+	/* model-view-projection matrix */
+	float mvp[16];
+
 } GLAppContext;
 
 typedef struct AppContext {
@@ -122,7 +131,7 @@ static const char *readShaderCode(const char *pFile){
 	return pShaderCode;
 }
 
-static int32_t creareProgramShader(const char *pVertexShaderCode,
+static int32_t createProgramShader(const char *pVertexShaderCode,
 								   const char *pFragmentShaderCode,
 								   GLProgramShaderSet *pProgramSet){
 	int ret = 0;
@@ -227,6 +236,7 @@ static int32_t creareProgramShader(const char *pVertexShaderCode,
 			fprintf(stderr, "success to link shader to program.\n");
 		}
 	}
+
 	return ret;
 
  error_exit:
@@ -248,6 +258,65 @@ static int32_t creareProgramShader(const char *pVertexShaderCode,
 
 static int32_t destroyProgramShader(GLProgramShaderSet *pProgramSet){
 	return 0;
+}
+
+struct vertex_info {
+  float position[3];
+  float color[3];
+};
+
+/* the vertex data is constant */
+static const struct vertex_info vertex_data[] = {
+  { {  0.0f,  0.500f, 0.0f }, { 1.f, 0.f, 0.f } },
+  { {  0.5f, -0.366f, 0.0f }, { 0.f, 1.f, 0.f } },
+  { { -0.5f, -0.366f, 0.0f }, { 0.f, 0.f, 1.f } },
+};
+
+static void
+init_mvp (float *res)
+{
+  /* initialize a matrix as an identity matrix */
+  res[0] = 1.f; res[4] = 0.f;  res[8] = 0.f; res[12] = 0.f;
+  res[1] = 0.f; res[5] = 1.f;  res[9] = 0.f; res[13] = 0.f;
+  res[2] = 0.f; res[6] = 0.f; res[10] = 1.f; res[14] = 0.f;
+  res[3] = 0.f; res[7] = 0.f; res[11] = 0.f; res[15] = 1.f;
+}
+
+static void
+compute_mvp (float *res,
+             float  phi,
+             float  theta,
+             float  psi)
+{
+  float x = phi * (G_PI / 180.f);
+  float y = theta * (G_PI / 180.f);
+  float z = psi * (G_PI / 180.f);
+  float c1 = cosf (x), s1 = sinf (x);
+  float c2 = cosf (y), s2 = sinf (y);
+  float c3 = cosf (z), s3 = sinf (z);
+  float c3c2 = c3 * c2;
+  float s3c1 = s3 * c1;
+  float c3s2s1 = c3 * s2 * s1;
+  float s3s1 = s3 * s1;
+  float c3s2c1 = c3 * s2 * c1;
+  float s3c2 = s3 * c2;
+  float c3c1 = c3 * c1;
+  float s3s2s1 = s3 * s2 * s1;
+  float c3s1 = c3 * s1;
+  float s3s2c1 = s3 * s2 * c1;
+  float c2s1 = c2 * s1;
+  float c2c1 = c2 * c1;
+
+  /* apply all three Euler angles rotations using the three matrices:
+   *
+   * ⎡  c3 s3 0 ⎤ ⎡ c2  0 -s2 ⎤ ⎡ 1   0  0 ⎤
+   * ⎢ -s3 c3 0 ⎥ ⎢  0  1   0 ⎥ ⎢ 0  c1 s1 ⎥
+   * ⎣   0  0 1 ⎦ ⎣ s2  0  c2 ⎦ ⎣ 0 -s1 c1 ⎦
+   */
+  res[0] = c3c2;  res[4] = s3c1 + c3s2s1;  res[8] = s3s1 - c3s2c1; res[12] = 0.f;
+  res[1] = -s3c2; res[5] = c3c1 - s3s2s1;  res[9] = c3s1 + s3s2c1; res[13] = 0.f;
+  res[2] = s2;    res[6] = -c2s1;         res[10] = c2c1;          res[14] = 0.f;
+  res[3] = 0.f;   res[7] = 0.f;           res[11] = 0.f;           res[15] = 1.f;
 }
 
 static void on_realize(GtkGLArea *area, gpointer user_data){
@@ -277,8 +346,34 @@ static void on_realize(GtkGLArea *area, gpointer user_data){
 	pVertexShaderCode   = readShaderCode("./simple.vert");
 	pFragmentShaderCode = readShaderCode("./simple.frag");
 
-	creareProgramShader(pVertexShaderCode, pFragmentShaderCode, &glAppCtx->programSet);
+	createProgramShader(pVertexShaderCode, pFragmentShaderCode, &glAppCtx->programSet);
 
+	glAppCtx->mvpIndex      = glGetUniformLocation(glAppCtx->programSet.programId, "mvp");
+	glAppCtx->positionIndex = glGetAttribLocation(glAppCtx->programSet.programId,  "position");
+	glAppCtx->colorIndex    = glGetAttribLocation(glAppCtx->programSet.programId,  "color");
+
+	glGenVertexArrays(1, &glAppCtx->vertexArrayObject);
+	glBindVertexArray(glAppCtx->vertexArrayObject);
+
+	glGenBuffers(1, &glAppCtx->vertexBufferObject);
+	glBindBuffer(GL_ARRAY_BUFFER, glAppCtx->vertexBufferObject);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(glAppCtx->positionIndex);
+	glVertexAttribPointer(glAppCtx->positionIndex, 3, GL_FLOAT, GL_FALSE,
+						  sizeof(struct vertex_info),
+						  (GLvoid*)(G_STRUCT_OFFSET(struct vertex_info, position)));
+
+	glEnableVertexAttribArray(glAppCtx->colorIndex);
+	glVertexAttribPointer(glAppCtx->colorIndex, 3, GL_FLOAT, GL_FALSE,
+						  sizeof(struct vertex_info),
+						  (GLvoid*)(G_STRUCT_OFFSET(struct vertex_info, color)));
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+
+	//glDeleteBuffers(1, &glAppCtx->vertexBufferObject);
+	
 	/* 初期設定 */
 	glClearColor(0.3, 0.3, 1.0, 0.0);
 	glEnable(GL_DEPTH_TEST);
@@ -313,44 +408,17 @@ static gboolean on_render(GtkGLArea *area, GdkGLContext *ctx, gpointer user_data
 	/* 光源の位置を設定 */
 	glLightfv(GL_LIGHT0, GL_POSITION, lightpos);
 
+	/* Model View Project Matrixを計算 */
+	compute_mvp(glAppCtx->mvp, 0.0, 0.0, 0.0);
+
 	glUseProgram(glAppCtx->programSet.programId);
+	glUniformMatrix4fv(glAppCtx->mvpIndex, 1, GL_FALSE, &(glAppCtx->mvp[0]));
 
-	/* モデルビュー変換行列の初期化 */
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
+	glBindVertexArray(glAppCtx->vertexArrayObject);
 
-	/* 視点の移動（物体の方を奥に移動）*/
-	glTranslated(0.0, 0.0, -3.0);
-#if 0
-	glBegin(GL_TRIANGLES);
-	glColor3d(1.0, 0.0, 0.0);
-	glVertex2d(0.9*cos(0.0), 0.9*sin(0.0));
-	glColor3d(0.0, 1.0, 0.0);
-	glVertex2d(0.9*cos(2.0*M_PI/3.0), 0.9*sin(2.0*M_PI/3.0));
-	glColor3d(0.0, 0.0, 1.0);
-	glVertex2d(0.9*cos(2.0*M_PI*2.0/3.0), 0.9*sin(2.0*M_PI*2.0/3.0));
-	glEnd();
-#else
-	{
-		static const GLfloat diffuse[] = { 0.6f, 0.1f, 0.1f, 1.0f };
-		static const GLfloat specular[] = { 0.3f, 0.3f, 0.3f, 1.0f };
+	glDrawArrays(GL_TRIANGLES, 0, 3);
 
-		printf("set material\n");
-		/* 材質の設定 */
-		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, diffuse);
-		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specular);
-		glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100.0f);
-	
-		/* 1枚の4角形を描く */
-		glNormal3d(0.0, 0.0, 1.0);
-		glBegin(GL_QUADS);
-		glVertex3d(-1.0, -1.0,  0.0);
-		glVertex3d( 1.0, -1.0,  0.0);
-		glVertex3d( 1.0,  1.0,  0.0);
-		glVertex3d(-1.0,  1.0,  0.0);
-		glEnd();
-	}
-#endif
+	glBindVertexArray(0);
 	glUseProgram(0);
 	glFlush();
 
@@ -362,13 +430,14 @@ static void on_resize(GtkGLArea *area, gint width, gint height, gpointer user_da
 		(AppContext *)(user_data);
 	printf("on_resize\n");
 
-	glViewport(0,0,width, height);
+	//glViewport(0,0,width, height);
 	/* 透視変換行列の指定 */
-	glMatrixMode(GL_PROJECTION);
+	//glMatrixMode(GL_PROJECTION);
 
 	/* 透視変換行列の初期化 */
-	glLoadIdentity();
-	gluPerspective(60.0, (double)width / (double)height, 1.0, 100.0);
+	//glLoadIdentity();
+	//glOrtho( -1.0, 1.0, -1.0, 1.0, -1.0, 1.0 );
+	//gluPerspective(60.0, (double)width / (double)height, 1.0, 100.0);
 
 	return;
 }

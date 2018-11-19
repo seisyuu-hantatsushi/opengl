@@ -17,6 +17,8 @@
 
 #include <errno.h>
 
+#include "matrix4x4.h"
+
 typedef struct GLProgramShaderSet {
 	GLuint vertextShader;
 	GLuint fragmentShader;
@@ -32,7 +34,7 @@ typedef struct GLAppContext {
 	GLint colorIndex;
 
 	/* model-view-projection matrix */
-	float mvp[16];
+	matrix4x4 mvp;
 
 } GLAppContext;
 
@@ -265,53 +267,6 @@ struct vertex_info {
   GLfloat color[4];
 };
 
-static void
-init_mvp (float *res)
-{
-  /* initialize a matrix as an identity matrix */
-  res[0] = 1.f; res[4] = 0.f;  res[8] = 0.f; res[12] = 0.f;
-  res[1] = 0.f; res[5] = 1.f;  res[9] = 0.f; res[13] = 0.f;
-  res[2] = 0.f; res[6] = 0.f; res[10] = 1.f; res[14] = 0.f;
-  res[3] = 0.f; res[7] = 0.f; res[11] = 0.f; res[15] = 1.f;
-}
-
-static void
-compute_mvp (float *res,
-             float  phi,
-             float  theta,
-             float  psi)
-{
-  float x = phi * (G_PI / 180.f);
-  float y = theta * (G_PI / 180.f);
-  float z = psi * (G_PI / 180.f);
-  float c1 = cosf (x), s1 = sinf (x);
-  float c2 = cosf (y), s2 = sinf (y);
-  float c3 = cosf (z), s3 = sinf (z);
-  float c3c2 = c3 * c2;
-  float s3c1 = s3 * c1;
-  float c3s2s1 = c3 * s2 * s1;
-  float s3s1 = s3 * s1;
-  float c3s2c1 = c3 * s2 * c1;
-  float s3c2 = s3 * c2;
-  float c3c1 = c3 * c1;
-  float s3s2s1 = s3 * s2 * s1;
-  float c3s1 = c3 * s1;
-  float s3s2c1 = s3 * s2 * c1;
-  float c2s1 = c2 * s1;
-  float c2c1 = c2 * c1;
-
-  /* apply all three Euler angles rotations using the three matrices:
-   *
-   * ⎡  c3 s3 0 ⎤ ⎡ c2  0 -s2 ⎤ ⎡ 1   0  0 ⎤
-   * ⎢ -s3 c3 0 ⎥ ⎢  0  1   0 ⎥ ⎢ 0  c1 s1 ⎥
-   * ⎣   0  0 1 ⎦ ⎣ s2  0  c2 ⎦ ⎣ 0 -s1 c1 ⎦
-   */
-  res[0] = c3c2;  res[4] = s3c1 + c3s2s1;  res[8] = s3s1 - c3s2c1; res[12] = 0.f;
-  res[1] = -s3c2; res[5] = c3c1 - s3s2s1;  res[9] = c3s1 + s3s2c1; res[13] = 0.f;
-  res[2] = s2;    res[6] = -c2s1;         res[10] = c2c1;          res[14] = 0.f;
-  res[3] = 0.f;   res[7] = 0.f;           res[11] = 0.f;           res[15] = 1.f;
-}
-
 static void on_realize(GtkGLArea *area, gpointer user_data){
 	AppContext *appCtx = (AppContext *)user_data;
 	GLAppContext *glAppCtx = &appCtx->glAppCtx;
@@ -322,9 +277,9 @@ static void on_realize(GtkGLArea *area, gpointer user_data){
 
 	/* the vertex data is constant */
 	struct vertex_info vertex_data[] = {
-		{ {cos(M_PI/2),                  sin(M_PI/2),              0.0 }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-		{ {cos(M_PI/2+1.0*2.0*M_PI/3.0), sin(M_PI/2+1.0*2.0*M_PI/3.0), 0.0 }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-		{ {cos(M_PI/2+2.0*2.0*M_PI/3.0), sin(M_PI/2+2.0*2.0*M_PI/3.0), 0.0 }, { 0.0f, 0.0f, 1.0f, 1.0f } },
+		{ {cos(M_PI/2),                  sin(M_PI/2),                  -2.0 }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+		{ {cos(M_PI/2+1.0*2.0*M_PI/3.0), sin(M_PI/2+1.0*2.0*M_PI/3.0), -2.0 }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+		{ {cos(M_PI/2+2.0*2.0*M_PI/3.0), sin(M_PI/2+2.0*2.0*M_PI/3.0), -2.0 }, { 0.0f, 0.0f, 1.0f, 1.0f } },
 	};
 
 	printf("on_realize\n");
@@ -387,6 +342,8 @@ static void on_realize(GtkGLArea *area, gpointer user_data){
 	glLightfv(GL_LIGHT0, GL_AMBIENT, lightamb);
 	glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);
 
+	/* Open GLはカメラの初期位置は原点にあり, -z方向を向いていて, 上はy方向. */
+
 	free(pFragmentShaderCode);
 	free(pVertexShaderCode);
 	return;
@@ -431,7 +388,7 @@ static void on_resize(GtkGLArea *area, gint width, gint height, gpointer user_da
 	glViewport(0, 0, width, height);
 
 	/* Model View Project Matrixを計算 */
-	compute_mvp(glAppCtx->mvp, 0.0, 0.0, 0.0);
+	perspectiveProjectMatrix(glAppCtx->mvp, 45.0, (float)width/(float)height, 1.0f, 10.0f);
 
 	return;
 }
@@ -471,7 +428,7 @@ int main(int argc, char **argv){
 	appCtx.topWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 
 	gtk_window_set_title(GTK_WINDOW(appCtx.topWindow), "Triangle");
-	gtk_widget_set_size_request(appCtx.topWindow, 300, 200);
+	gtk_widget_set_size_request(appCtx.topWindow, 300, 300);
 	gtk_container_set_border_width(GTK_CONTAINER(appCtx.topWindow), 2);
 
 	appCtx.glArea = createGLArea(&appCtx);

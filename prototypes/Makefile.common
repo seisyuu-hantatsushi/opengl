@@ -1,7 +1,11 @@
 # -*- Makefile -*-
-CC    = clang -c
-CXX   = clang++ -c
-LD    = clang -fuse-ld=lld
+#CC    = clang -c
+#CXX   = clang++ -c
+#LD    = clang -fuse-ld=lld
+
+CC  = gcc -c
+CXX = g++ -c
+LD  = gcc
 
 STRIP = strip -s
 
@@ -73,7 +77,7 @@ $(RELEASE_OUT) : $(RELEASE_OBJS)
 	@if [ ! -d $(BIN_DIR) ]; then \
 		mkdir $(BIN_DIR); \
 	fi;
-	$(LD) $(LDFLAGS) $(LIBS) $^ -o $@
+	$(LD) $^ $(LDFLAGS) $(LIBS) -o $@
 	cp $@ $@-symbol
 	$(STRIP) $@
 

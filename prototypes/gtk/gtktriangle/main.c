@@ -1,4 +1,7 @@
-
+/*
+   (C) TANIGUCHI, Kazushige 2019
+   taniguchi.kazushige@gmail.com
+ */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

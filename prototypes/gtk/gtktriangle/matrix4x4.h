@@ -1,3 +1,7 @@
+/*
+  (C) TANIGUCHI, Kazushige 2019
+ */
+
 #ifndef _MATRIX4x4_H_
 #define _MATRIX4x4_H_
 
